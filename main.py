@@ -73,39 +73,15 @@ class PredictFeatures(BaseModel):
 # -----------------------------------
 
 # ------------ API's ----------------
-"""
-@app.post("/execute")
-async def execute_command(params: Device) -> ApiResponse:
-    # # MQTT Configuration
-    response_event = push_commands_to_device(params)
-        
-    try:
-        # Wait for the acknowledgment and retrieve the payload
-        if params.command_ack:
-            response_payload = await asyncio.wait_for(response_event.get(), timeout=10)
-            response = {"status": "success", "payload": response_payload}
-            return ApiResponse(**response)
-        else:
-            response = {"status": "success", "payload": []}
-            return ApiResponse(**response)
-        
-    except asyncio.TimeoutError:
-        # Handle the case where no response payload was received within a timeout
-        return JSONResponse(content={"status": "ack-timeout", "message": "device might be offline"}, status_code=404)
-"""    
-
 @app.post("/execute/prediction/{gateway_id}")
 async def execute_prediction(gateway_id:str, prediction_params: PredictFeatures) -> ApiResponse:
     #Get Prediction
-    afonso_pena_predict = get_predictions([prediction_params])
-    #afonso_pena_predict, imbirussu_predict = get_predictions([prediction_params])
-    #prediction = predict_map(afonso_pena_predict + imbirussu_predict)[0]
-    prediction = predict_map(afonso_pena_predict)[0]
-    device_name = None
-    if prediction_params.coordinates.value == CoordinatesType.AFONSO_PENA.value:
-        device_name = CoordinatesType.AFONSO_PENA.value
+    if (gateway_id == 'afonso'):
+        afonso_pena_predict = get_predictions([prediction_params])
+        prediction = predict_map(afonso_pena_predict)[0]
     else:
-        device_name = CoordinatesType.IMBIRUSSU.value
+        imbirussu_predict = get_predictions([prediction_params])
+        prediction = predict_map(imbirussu_predict)[0]
 
     # format device command
     device = {
@@ -137,55 +113,6 @@ async def execute_prediction(gateway_id:str, prediction_params: PredictFeatures)
         # Handle the case where no response payload was received within a timeout
         return JSONResponse(content={"status": "ack-timeout", "message": "device might be offline"}, status_code=404)
 
-
-
-@app.post("/predict")
-def predict(params: list[PredictFeatures]) -> ApiResponse:
-
-    afonso_pena_predict = get_predictions(params)
-    predictions = afonso_pena_predict 
-    predictions = predict_map(predictions)
-    
-    # format device command
-    device = {
-        "device_id": gateway_id + "::time",
-        "command_ack": False,
-        "commands": [
-            {
-                "name": "time",
-                "value": time
-            },
-            {
-                "name": "day",
-                "value": day.value
-            },
-            {
-                "name": "afonso_pena_traffic_intensity",
-                "value": predictions
-            },
-            {
-                "name": "imbirussu_traffic_intensity",
-                "value": predictions
-            }
-        ]
-    }
-
-    # send command to device
-    params = Device(**device)
-    response_event = push_commands_to_device(params)
-        
-    try:
-        response = {"status": "success", "payload": device}
-        return ApiResponse(**response)
-        
-    except asyncio.TimeoutError:
-        # Handle the case where no response payload was received within a timeout
-        return JSONResponse(content={"status": "ack-timeout", "message": "device might be offline"}, status_code=404)
-
-
-
-    #response = {"status": "success", "payload": predictions}
-    #return ApiResponse(**response)
 
 
 @app.post("/set_clock/{gateway_id}")
@@ -262,13 +189,15 @@ def get_predictions(params):
         afonso_pena_df = np.array(afonso_pena_features)
         # Make predictions using the loaded model
         afonso_pena_predict = afonso_pena_model.predict(afonso_pena_df).tolist()
+        return afonso_pena_predict
 
     if len(imbirussu_features) > 0:
         imbirussu_df = np.array(imbirussu_features)
         # Make predictions using the loaded model
         imbirussu_predict = imbirussu_model.predict(imbirussu_df).tolist()
+        return imbirussu_predict
     
-    return afonso_pena_predict
+    
 
 
 def push_commands_to_device(params):
